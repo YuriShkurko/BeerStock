@@ -1,13 +1,23 @@
+import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from jinja2 import Template
 
-def main():
-    
-    beers = [
+global_beer_prices = [
         {'name': 'Pale Ale', 'price': '$5'},
         {'name': 'Lager', 'price': '$4'},
         {'name': 'Stout', 'price': '$6'},
     ]
+
+def GetBeerPrices():
+    return global_beer_prices
+
+def AddBeerPrice(entry):
+    global_beer_prices.append(entry)
+    return True
+    
+def main():
+    
+    beers = GetBeerPrices()
     
     html_template = '''
                 <!DOCTYPE html>
@@ -49,7 +59,7 @@ def main():
                 '''
     
     
-    
+
     class BeerTableHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == '/':
@@ -61,6 +71,32 @@ def main():
                 self.wfile.write(html.encode('utf-8'))
             else:
                 self.send_error(404, 'Page Not Found')
+        
+        def do_POST(self):
+            if self.path == '/add':
+                content_length = int(self.headers.get('Content-Length', 0))
+                post_data = self.rfile.read(content_length)
+                try:
+                    data = json.loads(post_data)
+                    print(data)
+                    if "name" in data and "price" in data:
+                        AddBeerPrice({"name": data["name"], "price": data["price"]})
+                        self.send_response(200)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "success"}')
+                    else:
+                        self.send_response(400)
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Missing fields"}')
+                except json.JSONDecodeError:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b'{"error": "Invalid JSON"}')
+            else:
+                self.send_error(404, 'Page Not Found')
+
+            
 
     server_address = ('', 8000)
     httpd = HTTPServer(server_address, BeerTableHandler)
