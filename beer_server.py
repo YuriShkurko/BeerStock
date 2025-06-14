@@ -2,18 +2,42 @@ import json
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from jinja2 import Template
 
-global_beer_prices = [
-        {'name': 'Pale Ale', 'price': '$5'},
-        {'name': 'Lager', 'price': '$4'},
-        {'name': 'Stout', 'price': '$6'},
+global_beer_listing = [
     ]
 
+global_beer_stock = [
+    {'name': 'Pale Ale', 'price': '$5'},
+    {'name': 'Lager', 'price': '$4'},
+    {'name': 'Stout', 'price': '$6'},
+    {'name': 'IPA', 'price': '$5'}
+]
 def GetBeerPrices():
-    return global_beer_prices
+    return global_beer_listing
+
+def GetStock():
+    return global_beer_stock
 
 def AddBeerPrice(entry):
-    global_beer_prices.append(entry)
+    global_beer_listing.append(entry)
     return True
+
+class Operator:
+        def __init__(self, stock, tap_list):
+            self.stock = stock
+            self.tap_list = tap_list
+
+        def get_stock(self):
+            return self.stock
+        
+        def ListBeer(self, beer_name):
+            for beer in self.stock:
+                if beer["name"] == beer_name:
+                    self.tap_list.append(beer)
+                    return True
+            return False
+                    
+operator = Operator(global_beer_stock, global_beer_listing)
+
     
 def main():
     
@@ -58,8 +82,7 @@ def main():
                 </html>
                 '''
     
-    
-
+        
     class BeerTableHandler(BaseHTTPRequestHandler):
         def do_GET(self):
             if self.path == '/':
@@ -93,10 +116,27 @@ def main():
                     self.send_response(400)
                     self.end_headers()
                     self.wfile.write(b'{"error": "Invalid JSON"}')
-            else:
-                self.send_error(404, 'Page Not Found')
-
-            
+            elif self.path == '/operator/add-to-tap':
+                length = int(self.headers.get('Content-Length', 0))
+                body = self.rfile.read(length)
+                try:
+                    data = json.loads(body)
+                    beer_name = data.get("name")
+                    if beer_name and operator.ListBeer(beer_name):
+                        self.send_response(200)
+                        self.end_headers()
+                        self.wfile.write(b'{"status": "added to tap list"}')
+                        return
+                    else:
+                        self.send_response(404)
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Beer not found in stock"}')
+                except json.JSONDecodeError:
+                    self.send_response(400)
+                    self.end_headers()
+                    self.wfile.write(b'{"error": "Invalid JSON"}')
+                else:
+                        self.send_error(404, 'Page Not Found')
 
     server_address = ('', 8000)
     httpd = HTTPServer(server_address, BeerTableHandler)

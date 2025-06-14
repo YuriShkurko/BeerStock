@@ -1,10 +1,9 @@
-from beer_server import GetBeerPrices, AddBeerPrice
+from beer_server import GetBeerPrices, AddBeerPrice, GetStock
+from beer_server import Operator
 
 def test_GetBeerPrices_matches_expected():
     expected = [
-        {"name": "Pale Ale", "price": "$5"},
-        {"name": "Lager", "price": "$4"},
-        {"name": "Stout", "price": "$6"}
+        
     ]
 
     actual = GetBeerPrices()
@@ -19,3 +18,17 @@ def test_AddBeerPrice_validate():
     
     table = GetBeerPrices()
     assert excpected_entry in table
+    
+def test_ListBeer_validate():
+    
+    expected_entry = "IPA"
+    stock = GetStock()
+    listing = GetBeerPrices()
+    operator = Operator(stock, listing)
+    succesful = operator.ListBeer(expected_entry)
+    assert succesful
+    assert {"name": "IPA", "price": "$4"} in listing
+
+    
+    
+    
