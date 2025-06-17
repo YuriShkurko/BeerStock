@@ -1,34 +1,26 @@
-from beer_server import GetBeerPrices, AddBeerPrice, GetStock
-from beer_server import Operator
+from beer_server import BeerStock
 
-def test_GetBeerPrices_matches_expected():
-    expected = [
-        
-    ]
+def test_list_and_delist_beer():
+    stock = BeerStock()
+    
+    assert stock.list_beer("IPA") == "listed"
+    assert {"name": "IPA", "price": "$5", "available": True} in stock.get_tap_list()
 
-    actual = GetBeerPrices()
+    assert stock.delist_beer("IPA")
+    assert all(b["name"] != "IPA" for b in stock.get_tap_list())
 
-    assert actual == expected
-    
-def test_AddBeerPrice_validate():
-    
-    excpected_entry = {"name": "IPA", "price": "$4"}
-    succesful = AddBeerPrice(excpected_entry)
-    assert succesful
-    
-    table = GetBeerPrices()
-    assert excpected_entry in table
-    
-def test_ListBeer_validate():
-    
-    expected_entry = "IPA"
-    stock = GetStock()
-    listing = GetBeerPrices()
-    operator = Operator(stock, listing)
-    succesful = operator.ListBeer(expected_entry)
-    assert succesful
-    assert {"name": "IPA", "price": "$4"} in listing
+def test_hold_and_unhold_beer():
+    stock = BeerStock()
 
-    
-    
-    
+    stock.list_beer("IPA")
+    assert stock.hold_beer("IPA")
+    assert any(b["name"] == "IPA" and b["available"] is False for b in stock.get_tap_list())
+
+    assert stock.unhold_beer("IPA")
+    assert any(b["name"] == "IPA" and b["available"] is True for b in stock.get_tap_list())
+
+def test_release_beer_removes_from_stock():
+    stock = BeerStock()
+
+    assert stock.release_beer("IPA")
+    assert all(beer["name"] != "IPA" for beer in stock.get_stock())

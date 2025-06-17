@@ -1,10 +1,16 @@
 import json
-from http.server import BaseHTTPRequestHandler, HTTPServer
+from http.server import BaseHTTPRequestHandler
+from http.server import ThreadingHTTPServer as HTTPServer
 from jinja2 import Template
 
 class BeerStock:
     def __init__(self):
-        self.tap_list = []
+        self.tap_list = [
+           # {"name": "Pale Ale", "price": "$5", "available": True}
+           
+           
+     # you need to make sure it doesnt take ages to load, and make sure logic works, also add tests :) gl 
+        ]
         self.stock = [
             {'name': 'Pale Ale', 'price': '$5'},
             {'name': 'Lager', 'price': '$4'},
@@ -18,16 +24,41 @@ class BeerStock:
     def get_stock(self):
         return self.stock
 
-    def list_beer(self, entry):
-        self.tap_list.append(entry)
-        return True
-    
-    def list_beer_from_stock(self, beer_name):
+    def list_beer(self, beer_name):
+        if any(beer["name"] == beer_name for beer in self.tap_list):
+            return "already_listed"
+
         for beer in self.stock:
             if beer["name"] == beer_name:
-                self.tap_list.append(beer)
+                self.tap_list.append({**beer, "available": True})
+                return "listed"
+
+        return "not_in_stock"
+    
+    def delist_beer(self, beer_name):
+        original_len = len(self.tap_list)
+        self.tap_list = [beer for beer in self.tap_list if beer["name"] != beer_name]
+        return len(self.tap_list) < original_len
+    
+    def hold_beer(self, beer_name):
+        for beer in self.tap_list:
+            if beer["name"] == beer_name:
+                beer["available"] = False
                 return True
         return False
+    
+    def unhold_beer(self, beer_name):
+        for beer in self.tap_list:
+            if beer["name"] == beer_name:
+                beer["available"] = True
+                return True
+        return False
+    
+    def release_beer(self, beer_name):
+        # Remove from stock entirely
+        before = len(self.stock)
+        self.stock = [beer for beer in self.stock if beer["name"] != beer_name]
+        return len(self.stock) < before
 
 
 class BeerStockServer:
@@ -66,6 +97,7 @@ class BeerStockServer:
                         <tr>
                             <td>{{ beer.name }}</td>
                             <td>{{ beer.price }}</td>
+                            <td>{{ 'Unavailable' if beer.get('available', True) == False else 'Available' }}</td>
                         </tr>
                     {% endfor %}
                 </table>
@@ -81,8 +113,9 @@ class BeerStockServer:
     def make_handler(self):
         beer_stock = self.beer_stock
         html_template = self.html_template
-
+    
         class BeerTableHandler(BaseHTTPRequestHandler):
+            
             def do_GET(self):
                 if self.path == '/':
                     self.send_response(200)
@@ -105,28 +138,112 @@ class BeerStockServer:
                 content_length = int(self.headers.get('Content-Length', 0))
                 post_data = self.rfile.read(content_length)
 
-                if self.path == '/add':
+                if self.path == '/list':
                     try:
                         data = json.loads(post_data)
-                        if "name" in data and "price" in data:
-                            beer_stock.list_beer({"name": data["name"], "price": data["price"]})
+                        name = data.get("name")
+                        if name:
+                            result = beer_stock.list_beer(name)
                             self.send_response(200)
                             self.send_header('Content-Type', 'application/json')
                             self.end_headers()
-                            self.wfile.write(b'{"status": "success"}')
+
+                            if result == "listed":
+                                self.wfile.write(b'{"status": "beer listed"}')
+                            elif result == "already_listed":
+                                self.wfile.write(b'{"status": "beer already listed"}')
+                            else:
+                                self.wfile.write(b'{"error": "beer not in stock"}')
                         else:
                             self.send_response(400)
                             self.end_headers()
-                            self.wfile.write(b'{"error": "Missing fields"}')
+                            self.wfile.write(b'{"error": "Missing name field"}')
                     except json.JSONDecodeError:
                         self.send_response(400)
                         self.end_headers()
                         self.wfile.write(b'{"error": "Invalid JSON"}')
-
+                elif self.path == '/delist':
+                    try:
+                        data = json.loads(post_data)
+                        name = data.get("name")
+                        if name and beer_stock.delist_beer(name):
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"status": "beer removed from tap"}')
+                        else:
+                            self.send_response(404)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "beer not found on tap"}')
+                    except json.JSONDecodeError:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Invalid JSON"}')
+                elif self.path == '/hold':
+                    try:
+                        data = json.loads(post_data)
+                        name = data.get("name")
+                        if name and beer_stock.hold_beer(name):
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"status": "beer put on hold"}')
+                        else:
+                            self.send_response(404)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "beer not found on tap"}')
+                    except json.JSONDecodeError:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Invalid JSON"}')
+                elif self.path == '/unhold':
+                    try:
+                        data = json.loads(post_data)
+                        name = data.get("name")
+                        if name and beer_stock.unhold_beer(name):
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"status": "beer unheld"}')
+                        else:
+                            self.send_response(404)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "beer not found on tap"}')
+                    except json.JSONDecodeError:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Invalid JSON"}')
+                elif self.path == '/release':
+                    try:
+                        data = json.loads(post_data)
+                        name = data.get("name")
+                        if name and beer_stock.release_beer(name):
+                            self.send_response(200)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"status": "beer removed from stock"}')
+                        else:
+                            self.send_response(404)
+                            self.send_header('Content-Type', 'application/json')
+                            self.end_headers()
+                            self.wfile.write(b'{"error": "beer not in stock"}')
+                    except json.JSONDecodeError:
+                        self.send_response(400)
+                        self.send_header('Content-Type', 'application/json')
+                        self.end_headers()
+                        self.wfile.write(b'{"error": "Invalid JSON"}')
                 else:
                     self.send_error(404, 'Page Not Found')
-
-        return BeerTableHandler
+                    
+        return BeerTableHandler        
+            
+            
     
 if __name__ == '__main__':
     server = BeerStockServer()
