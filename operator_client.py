@@ -75,6 +75,20 @@ class OperatorClient:
             print(f"Request failed: {e}")
             return False
 
+    def Purchase(self, name, price):
+        payload = {"name": name, "price": price}
+        try:
+            response = requests.post(f"{self.server_url}/purchase", json=payload)
+            if response.status_code == 200:
+                print("Beer added to stock successfully.")
+                return True
+            else:
+                print(f"Failed to add beer to stock: {response.text}")
+                return False
+        except requests.exceptions.RequestException as e:
+            print(f"Request failed: {e}")
+            return False
+    
     def ShowListedBeer(self):
         try:
             response = requests.get(f"{self.server_url}/api/listed")
