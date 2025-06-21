@@ -1,4 +1,7 @@
 from beer_server import BeerStock
+from customer_client import CustomerClient
+from operator_client import OperatorClient
+
 
 def test_list_and_delist_beer():
     stock = BeerStock()
@@ -24,3 +27,14 @@ def test_release_beer_removes_from_stock():
 
     assert stock.release_beer("IPA")
     assert all(beer["name"] != "IPA" for beer in stock.get_stock())
+
+def test_order_beer_valid():
+    operator = OperatorClient("http://localhost:8000")
+    customer = CustomerClient("http://localhost:8000")
+
+    # Ensure beer is on the tap list and available
+    operator.ListBeer("IPA")
+    operator.Unhold("IPA")
+
+    assert customer.PurchaseBeer("IPA") == "Order placed for IPA"
+    assert customer.PurchaseBeer("Nonexistent Beer") == "Beer not available"

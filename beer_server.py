@@ -64,6 +64,12 @@ class BeerStock:
         before = len(self.stock)
         self.stock = [beer for beer in self.stock if beer["name"] != beer_name]
         return len(self.stock) < before
+    
+    def customer_purchase_beer(self, name): # for now just checks if its in the tap list and if its availlable without change to stock of the actual beer
+        for beer in self.tap_list:
+            if beer["name"] == name and beer["available"] == True:
+                return True
+        return False
 
 class BeerBoardServer:
     def __init__(self, host='localhost', port=8200, stock_api_url='http://localhost:8000/api/listed'):
@@ -226,6 +232,12 @@ class BeerStockServer:
                         self.respond(200, {"status": "beer removed from stock"})
                     else:
                         self.respond(404, {"error": "beer not in stock"})
+                
+                elif self.path =='/customer/purchase':
+                    if name and beer_stock.customer_purchase_beer(name):
+                        self.respond(200, {"status": f"Order placed for {name}"})
+                    else:
+                        self.respond(404, {"error": "Beer not available"})
 
                 else:
                     self.send_error(404, 'Page Not Found')
