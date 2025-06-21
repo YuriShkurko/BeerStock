@@ -1,6 +1,8 @@
 import json
 from http.server import BaseHTTPRequestHandler
 from http.server import ThreadingHTTPServer as HTTPServer
+import threading
+import requests
 from jinja2 import Template
 
 class BeerStock:
@@ -63,11 +65,10 @@ class BeerStock:
         self.stock = [beer for beer in self.stock if beer["name"] != beer_name]
         return len(self.stock) < before
 
-
-class BeerStockServer:
-    def __init__(self, host='localhost', port=8000):
-        self.beer_stock = BeerStock()
+class BeerBoardServer:
+    def __init__(self, host='localhost', port=8200, stock_api_url='http://localhost:8000/api/listed'):
         self.server_address = (host, port)
+        self.stock_api_url = stock_api_url
         self.html_template = '''
             <!DOCTYPE html>
             <html>
@@ -110,14 +111,52 @@ class BeerStockServer:
 
     def run(self):
         server = HTTPServer(self.server_address, self.make_handler())
+        print(f"Beer Board running at http://{self.server_address[0]}:{self.server_address[1]}/")
+        server.serve_forever()
+
+    def make_handler(self):
+        
+        beer_stock = self.stock_api_url
+        html_template = self.html_template
+        
+        class BeerBoardHandler(BaseHTTPRequestHandler):
+            def do_GET(self):
+                if self.path == '/':
+                    try:
+                        # Fetch tap list from BeerStockServer
+                        response = requests.get('http://localhost:8000/api/listed', timeout=2)
+                        beers = response.json() if response.status_code == 200 else []
+
+                        self.send_response(200)
+                        self.send_header('Content-type', 'text/html')
+                        self.end_headers()
+                        
+                        template = Template(html_template)
+                        html = template.render(beers=beers)
+                        self.wfile.write(html.encode('utf-8'))
+                    except Exception as e:
+                        self.send_response(500)
+                        self.end_headers()
+                        self.wfile.write(f"Error fetching tap list: {e}".encode('utf-8'))
+                else:
+                    self.send_error(404, 'Not Found')
+
+        return BeerBoardHandler
+        
+class BeerStockServer:
+    def __init__(self, host='localhost', port=8000):
+        self.beer_stock = BeerStock()
+        self.server_address = (host, port)
+
+    def run(self):
+        server = HTTPServer(self.server_address, self.make_handler())
         print(f"Server running at http://{self.server_address[0]}:{self.server_address[1]}/")
         server.serve_forever()
 
     def make_handler(self):
         beer_stock = self.beer_stock
-        html_template = self.html_template
     
-        class BeerTableHandler(BaseHTTPRequestHandler):
+        class BeerStockHandler(BaseHTTPRequestHandler):
             
             def respond(self, code, data: dict):
                 self.send_response(code)
@@ -126,17 +165,8 @@ class BeerStockServer:
                 self.wfile.write(json.dumps(data).encode('utf-8'))
                 
             def do_GET(self):
-                if self.path == '/':
-                    self.send_response(200)
-                    self.send_header('Content-type', 'text/html')
-                    self.end_headers()
-                    template = Template(html_template)
-                    html = template.render(beers=beer_stock.get_tap_list())
-                    self.wfile.write(html.encode('utf-8'))
-
-                elif self.path == '/api/listed':
+                if self.path == '/api/listed':
                     self.respond(200, beer_stock.get_tap_list())
-
                 else:
                     self.send_error(404, 'Page Not Found')
 
@@ -200,10 +230,26 @@ class BeerStockServer:
                 else:
                     self.send_error(404, 'Page Not Found')
                     
-        return BeerTableHandler        
+        return BeerStockHandler        
             
             
     
 if __name__ == '__main__':
-    server = BeerStockServer()
-    server.run()
+    stock_server = BeerStockServer()
+    board_server = BeerBoardServer()
+
+    # Create threads
+    stock_thread = threading.Thread(target=stock_server.run, daemon=True)
+    board_thread = threading.Thread(target=board_server.run, daemon=True)
+
+    # Start threads
+    stock_thread.start()
+    board_thread.start()
+
+    # Keep the main thread alive
+    print("Both servers are running. Press Ctrl+C to stop.")
+    try:
+        while True:
+            pass
+    except KeyboardInterrupt:
+        print("\nShutting down servers...")
