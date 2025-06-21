@@ -38,3 +38,18 @@ def test_order_beer_valid():
 
     assert customer.PurchaseBeer("IPA") == "Order placed for IPA"
     assert customer.PurchaseBeer("Nonexistent Beer") == "Beer not available"
+
+def test_purchase_beer_adds_new_beer():
+    stock = BeerStock()
+    new_name = "Test Beer"
+    new_price = "$7"
+    assert stock.purchase_beer(new_name, new_price) is True
+    assert any(beer["name"] == new_name and beer["price"] == new_price for beer in stock.get_stock())
+
+def test_purchase_beer_duplicate():
+    stock = BeerStock()
+    existing_name = stock.get_stock()[0]["name"]
+    existing_price = stock.get_stock()[0]["price"]
+    assert stock.purchase_beer(existing_name, existing_price) is False
+    # Ensure only one instance in stock
+    assert [beer["name"] for beer in stock.get_stock()].count(existing_name) == 1

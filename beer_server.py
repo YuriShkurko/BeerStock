@@ -4,6 +4,7 @@ from http.server import ThreadingHTTPServer as HTTPServer
 import threading
 import requests
 from jinja2 import Template
+from swagger_doc import SWAGGER_JSON, SWAGGER_UI_HTML
 
 class BeerStock:
     def __init__(self):
@@ -173,6 +174,16 @@ class BeerStockServer:
             def do_GET(self):
                 if self.path == '/api/listed':
                     self.respond(200, beer_stock.get_tap_list())
+                elif self.path == '/swagger.json':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'application/json')
+                    self.end_headers()
+                    self.wfile.write(json.dumps(SWAGGER_JSON).encode('utf-8'))
+                elif self.path == '/swagger':
+                    self.send_response(200)
+                    self.send_header('Content-Type', 'text/html')
+                    self.end_headers()
+                    self.wfile.write(SWAGGER_UI_HTML.encode('utf-8'))
                 else:
                     self.send_error(404, 'Page Not Found')
 
