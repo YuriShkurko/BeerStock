@@ -6,8 +6,11 @@ import requests
 from jinja2 import Template
 from swagger_doc import SWAGGER_JSON, SWAGGER_UI_HTML
 
+
 class BeerStock:
-    def __init__(self):
+    def __init__(self, db_driver):
+        
+        self.db = db_driver
         self.tap_list = [
            # {"name": "Pale Ale", "price": "$5", "available": True}
         ]
@@ -21,7 +24,7 @@ class BeerStock:
     def get_tap_list(self):
         return self.tap_list
 
-    def get_stock(self):
+    def get_storage(self):
         return self.stock
 
     def list_beer(self, beer_name):
@@ -71,6 +74,19 @@ class BeerStock:
             if beer["name"] == name and beer["available"] == True:
                 return True
         return False
+    
+    def get_all_beers(self):
+        return self.db.list_all_beers()
+
+    def remove_from_storage(self, beer_name):
+        return self.db.remove_from_storage(beer_name)
+
+    def add_to_storage(self, name, base_price, min_price, max_price):
+        return self.db.add_to_storage(name, base_price, min_price, max_price)
+
+    def get_from_storage(self, name):
+        return self.db.get_from_storage(name)
+    
 
 class BeerBoardServer:
     def __init__(self, host='localhost', port=8200, stock_api_url='http://localhost:8000/api/listed'):
