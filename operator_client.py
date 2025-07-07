@@ -13,7 +13,12 @@ class OperatorClient:
                 print(resp.get("status") or resp.get("error"))
                 return resp.get("status") == "beer listed"
             else:
-                print(f"Request failed: {response.status_code}")
+                try:
+                    error_message = response.json().get("error")
+                except Exception:
+                    error_message = response.text  # fallback if not JSON
+
+                print(f"Request failed: {response.status_code} - {error_message}")
                 return False
         except requests.exceptions.RequestException as e:
             print(f"Request failed: {e}")

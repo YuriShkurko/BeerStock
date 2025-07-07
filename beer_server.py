@@ -5,10 +5,12 @@ import threading
 import requests
 from jinja2 import Template
 from swagger_doc import SWAGGER_JSON, SWAGGER_UI_HTML
+from beer_stock_db_postgress import PostgresBeerStockDB 
+import psycopg2
 
 
 class BeerStock:
-    def __init__(self, db_driver):
+    def __init__(self, db_driver=None):
         
         self.db = db_driver
         self.tap_list = [
@@ -28,61 +30,34 @@ class BeerStock:
         return self.stock
 
     def list_beer(self, beer_name):
-        if any(beer["name"] == beer_name for beer in self.tap_list):
-            return "already_listed"
-
-        for beer in self.stock:
-            if beer["name"] == beer_name:
-                self.tap_list.append({**beer, "available": True})
-                return "listed"
-
-        return "not_in_stock"
+        return self.db.list_beer(beer_name)
     
     def delist_beer(self, beer_name):
-        original_len = len(self.tap_list)
-        self.tap_list = [beer for beer in self.tap_list if beer["name"] != beer_name]
-        return len(self.tap_list) < original_len
+        return self.db.delist_beer(beer_name)
     
     def hold_beer(self, beer_name):
-        for beer in self.tap_list:
-            if beer["name"] == beer_name:
-                beer["available"] = False
-                return True
-        return False
+        return self.db.hold_beer(beer_name)
     
     def unhold_beer(self, beer_name):
-        for beer in self.tap_list:
-            if beer["name"] == beer_name:
-                beer["available"] = True
-                return True
-        return False
+        return self.db.unhold_beer(beer_name)
     
-    def purchase_beer(self, name, price):
-        if any(beer["name"] == name for beer in self.stock):
-            return False  # Already in stock
-        self.stock.append({"name": name, "price": price})
-        return True
+    def add_to_storage(self, name, price):
+        numeric_price = float(price.strip("$"))
+        min_price = f"${round(numeric_price * 0.9, 2):.2f}"
+        max_price = f"${round(numeric_price * 1.1, 2):.2f}"
+        return self.db.add_to_storage(name, price, min_price, max_price)
     
     def release_beer(self, beer_name):
-        # Remove from stock entirely
-        before = len(self.stock)
-        self.stock = [beer for beer in self.stock if beer["name"] != beer_name]
-        return len(self.stock) < before
+        return self.db.release_beer(beer_name)
     
     def customer_purchase_beer(self, name): # for now just checks if its in the tap list and if its availlable without change to stock of the actual beer
-        for beer in self.tap_list:
-            if beer["name"] == name and beer["available"] == True:
-                return True
-        return False
+        return self.db.customer_purchase_beer(name)
     
     def get_all_beers(self):
         return self.db.list_all_beers()
 
     def remove_from_storage(self, beer_name):
         return self.db.remove_from_storage(beer_name)
-
-    def add_to_storage(self, name, base_price, min_price, max_price):
-        return self.db.add_to_storage(name, base_price, min_price, max_price)
 
     def get_from_storage(self, name):
         return self.db.get_from_storage(name)
@@ -165,11 +140,12 @@ class BeerBoardServer:
                     self.send_error(404, 'Not Found')
 
         return BeerBoardHandler
+
         
 class BeerStockServer:
-    def __init__(self, host='localhost', port=8000):
-        self.beer_stock = BeerStock()
+    def __init__(self, host='localhost', port=8000, beer_stock=None):
         self.server_address = (host, port)
+        self.beer_stock = beer_stock
 
     def run(self):
         server = HTTPServer(self.server_address, self.make_handler())
@@ -247,7 +223,7 @@ class BeerStockServer:
 
                 elif self.path == '/purchase':
                     if name and price:
-                        if beer_stock.purchase_beer(name, price):
+                        if beer_stock.add_to_storage(name, price):
                             self.respond(200, {"status": "beer added to stock"})
                         else:
                             self.respond(400, {"error": "beer already in stock"})
@@ -255,7 +231,7 @@ class BeerStockServer:
                         self.respond(400, {"error": "Missing name or price"})
 
                 elif self.path == '/release':
-                    if name and beer_stock.release_beer(name):
+                    if name and beer_stock.remove_from_storage(name):
                         self.respond(200, {"status": "beer removed from stock"})
                     else:
                         self.respond(404, {"error": "beer not in stock"})

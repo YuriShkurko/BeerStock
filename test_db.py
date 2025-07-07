@@ -1,7 +1,6 @@
 import psycopg2
 import pytest
-import socket
-from beer_server import BeerStock  # this is your new DB-backed class
+from beer_server import BeerStock 
 from beer_stock_db_postgress import PostgresBeerStockDB
 
 @pytest.fixture(scope="module")
@@ -69,3 +68,8 @@ def test_add_beer_db(db_conn):
     assert ipa["min_price"] == "$4"
     assert ipa["max_price"] == "$6"
 
+def test_add_remove_beer_db(db_conn):
+    stock = BeerStock(PostgresBeerStockDB(db_conn))
+    stock.add_to_storage("IPA", "$5", "$4", "$6")
+    stock.remove_from_storage("IPA")
+    assert stock.get_from_storage("IPA") is None
